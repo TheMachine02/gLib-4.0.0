@@ -1,0 +1,158 @@
+#include	"gCoreBase.inc"
+#include	"gCoreMacro.inc"
+
+#ifdef	gCOMPILE_AXM
+; axiom first word
+	.dw	$C0DE
+; first sub
+gInitLib=AXM_INIT
+; perform library initialisation
+	.dw	gInitEnd + 3
+	.db	%00011111
+	.db	62h, 02h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gInitLibrary:
+#endif
+; return: HL=0 if init proceed without error, non-zero otherwise
+; fill all L1 with 0
+	ld	hl, saveSScreen
+	ld	(hl), 0
+	ld	de, saveSScreen+1
+	ld	bc, 767
+	ldir
+; initialise the matrix
+	call	gLoadIdentity
+; initialise filling table
+	ld	de, gFillLUT
+#ifdef	gCOMPILE_AXM
+	.db $7F \ .org $-1
+#endif
+	ld	hl, gData_Filling
+	ld	bc, gFillSize
+	ldir
+; initialise name string
+#ifdef	gCOMPILE_AXM
+	.db	$7F \ .org $-1
+#endif
+	ld	hl, gData_VertexArrayName
+	ld	de, gVertexArrayName
+	ld	bc, 5
+	ldir
+_gGenSinTable:
+; generate the sinus table at gSinLUT (aligned)
+	ld	hl, gSinLUT
+_gSinLoop:
+	push	hl
+	ld	a, l
+	sub	64
+	ld	l, a
+	call	sub_Sin
+	ld	a, l
+	sra	a
+	pop	hl
+	ld	(hl), a
+	inc	l
+	jr	nz, _gSinLoop
+; jr save one byte
+	xor	a
+	ld	(iy+gFLAGS), a
+; next : shader system initialisation
+	ld	hl, plotSScreen
+	ld	(gLayer), hl
+_gGenCache:
+; generate a aligned cache for vertex
+; get the full adress of cache (not aligned) in gVertexCache
+; get high byte of aligned adress in gL2Cache
+#ifdef	gCOMPILE_AXM
+	.db	$7F \ .org $-1
+#endif
+	ld	hl, gData_CacheName
+	push	hl
+	ld	hl, gCACHE_SIZE
+	call	sub_NewVar
+	ld	a, h
+	or	l
+	jr	z, _gGenError
+	ld	(gVertexCache), hl
+	ld	a, l
+	or	a
+	jr	z, _gSkipBoundInc
+	inc	h
+_gSkipBoundInc:
+	ld	a, h
+	ld	(gL1Cache), a
+	add	a, 2
+	ld	(gL2Cache), a
+; speed stuff - disable TI interrupt and indicator
+	bcall(_RunIndicOff)
+	res	5,(iy+0)
+	di
+; end initialisation
+	ld	hl, 0
+	ret
+_gGenError:
+	ld	hl, gOUT_OF_MEMORY
+	ld	(gError), hl
+	ret
+gData_CacheName:
+	.db	$16,"GVCACHE",0
+gData_VertexArrayName:
+	.db	$16,"GVAO"
+gInitEnd:
+
+; various commands
+#include	gCoreMatrix.z80
+#include	gCoreVectorMath.z80
+#include	gCoreVertexArray.z80
+#include	gCoreClipping.z80
+#include	gCoreRaster.z80
+#include	gCoreProject.z80
+	.echo	 "number of command(s):", eval(gSubVal-$3F60+1)
+; axm end
+	.dw	$0000
+
+; token hook
+; system
+	.dw	029Eh
+	.db	8
+	.db	"gInitLib"
+; matrix
+	.dw	02B2h
+	.db	13
+	.db	"gLoadIdentity"
+	.dw	02BAh
+	.db	11
+	.db	"gPushMatrix"
+	.dw	02AAh
+	.db	10
+	.db	"gPopMatrix"
+	.dw	02ACh
+	.db	7
+	.db	"gAngle("
+	.dw	2B0h
+	.db	11
+	.db	"gTranspose("
+; vertex manipulation	
+	.dw	02B4h
+	.db	8
+	.db	"gProject"
+	.dw	02A4h
+	.db	8
+	.db	"gMulVec("
+; vertex array
+	.dw	02C6h
+	.db	8
+	.db	"gGenVAO("
+	.dw	02C8h
+	.db	14
+	.db	"gVertexAttrib("
+; filling
+
+
+; clipping
+	.dw	02A2h
+	.db	12
+	.db	"gComputeCode"
