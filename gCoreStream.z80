@@ -1,0 +1,189 @@
+; This file hold function in relation to vertex array.
+; Shaders is NOT in this file, even if they also use vertex array format.
+; functions:
+; gGenVAO(id) : return adress, or error if failed. [WARNING: disable interrupt, so setup your interrupts after this command, or do FnOn]
+; gVertexAttrib(adress, attrib_slot, size,data) : return nothing.
+; example : gVertexAttrib(G,0,°GVEC3,GDB1)
+; gStream(0,Data(GDB1r,64,6))
+
+
+
+
+
+
+#comment
+#ifdef	gCOMPILE_AXM
+gGenVAO=AXM_LABEL
+	.dw	gGenVAOEnd
+	.db	%00011111
+	.db	62h, 16h
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gGenVertexArrayObject:
+#endif
+; xx TStates, HL is array id
+; return: HL adress of the vertex array object
+; generate an array if necessary
+	ld	(gVertexArrayID), hl
+	ld	hl, gVertexArrayName
+	call	sub_GetCalc
+	ld	a, h
+	or	l
+	ret	nz
+_gGenerateObject:
+	ld	hl, gVertexArrayName
+	push	hl
+	ld	hl, gVAO_SIZE
+	call	sub_NewVar
+; redisable interrupt
+	di
+	ld	a, h
+	or	l
+	jr	z, _gObjectError
+; fill it with starting values
+	push	hl
+	ld	(hl), 0
+	ld	d, h
+	ld	e, l
+	inc	de
+	ld	bc, gVAO_SIZE-1
+	ldir
+	pop	hl
+; return adress
+	ret
+_gObjectError:
+	ld	hl, gOUT_OF_MEMORY
+	ld	(gError), hl
+	ret
+gGenVAOEnd:
+
+#ifdef	gCOMPILE_AXM
+gVertexAttrib=AXM_LABEL
+	.dw	gVertexAttribEnd + 1
+	.db	%00011111
+	.db	62h, 17h
+	.db	AXM_SUB
+	.db	AXM_4ARGS
+	.org	$0
+#else
+gVertexAttrib:
+#endif
+; xx TStates
+; add a attribute to vertex array
+; format : [data adress-2, jumpcall-3]
+	pop	ix
+	pop	bc
+	ld	a, c
+	ld	b, h
+	ld	c, l
+	pop	de
+	ld	h, d
+	ld	l, e
+	add	hl, hl
+	add	hl, hl
+	add	hl, de
+	pop	de
+	add	hl, de
+	ld	(hl), c
+	inc	hl
+	ld	(hl), b
+	inc	hl
+	ex	de, hl
+	dec	a
+	add	a, a
+	add	a, a
+#ifdef	gCOMPILE_AXM
+	.db $7F \ .org $-1
+#endif
+	ld	hl, gData_JmpTable
+	add	a, l
+	ld	l, a
+	jr	nc, $+3
+	inc	h
+; hl is copy
+	ldi \ ldi \ ldi
+	jp	(ix)	
+; look up table
+gData_JmpTable:
+	ret 	\ nop \ nop \ nop
+	jp	_gJmpMul2 \ nop
+	jp	_gJmpMul3 \ nop
+	jp	_gJmpMul4 \ nop
+	ret 	\ nop \ nop \ nop
+	jp	_gJmpMul6 \ nop
+	ret 	\ nop \ nop \ nop
+	ret 	\ nop \ nop \ nop
+	jp	_gJmpMul9
+_gJmpMul4:
+	add	hl, hl
+_gJmpMul2:
+	add	hl, hl
+	ret
+_gJmpMul3:
+	ld	d, h
+	ld	e, l
+	add	hl, hl
+	add	hl, de
+	ret
+_gJmpMul6:
+	ld	d, h
+	ld	e, l
+	add	hl, hl
+	add	hl, de
+	add	hl, hl
+	ret
+_gJmpMul9:
+	ld	d, h
+	ld	e, l
+	add	hl, hl
+	add	hl, hl
+	add	hl, hl
+	add	hl, de
+	ret
+gVertexAttribEnd:
+
+; Vertex Array Object.
+; old vertex array attribute
+; gStream0, gStride0, reserved
+; gStream1, gStride1, reserved
+; ....
+
+gTransformStream:
+; lenght, offset_stream
+	ld	a, l
+	ld	(gVertexID), a
+	ex	de, hl
+	ld	hl, (gCallStride0)
+	call	_gCallHL
+	ld	de,(gStream0)
+	add	hl, de
+	pop	bc
+	ld	a, c
+	ld	(gStreamCount), a
+_gTransformLoop:
+	call	_gVertexShader
+; cache data
+; hl = gClipCode
+	ld	hl, gVertexID
+	inc	(hl)
+	ld	hl, gStreamCount
+	dec	(hl)
+	jp	nz, _gTransformLoop
+	ret
+_gVertexShader:
+	ld	hl, (gVertexShader)
+_gCallHL:
+	jp	(hl)
+
+
+_gDefaultShader:
+	ld	de, (gQualifier0)
+	ld	hl, (gValueStride0)
+	add	hl, de
+	ld	(gQualifier0), hl
+	ex	de, hl
+	call	gTransform
+	jp	gComputeCode
+#endcomment

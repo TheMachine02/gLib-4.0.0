@@ -1,0 +1,719 @@
+; functions:
+; gProject : project the point defined by gPosition
+
+#ifdef	gCOMPILE_AXM
+gProject=AXM_LABEL
+	.dw	gProjectEnd
+	.db	%00011111
+	.db	62h, 0Dh
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+; Assume hl is stricly positive (clipping code is run before project)
+; ~730 T-States depending the input
+	ld	hl, (gPositionZ)
+	ld	de, (gPositionX)
+	ld	bc, (gPositionY)
+; DE is X, BC is Y, HL is Z
+_gMapRange:
+	ld	a, h
+	or	a
+gProjectEntry:
+	ld	a, l
+	jp	nz, _gScaleDown
+_gScaleUp:
+	add	a, a
+	jp	c, _gScaleUpSkip
+;	ret	z
+_gScaleUpLoop:
+	sla	e
+	rl	d
+	sla	c
+	rl	b
+	add	a, a
+	jp	nc, _gScaleUpLoop
+_gScaleUpSkip:
+	rra
+	jp	_gScalingDone
+_gScaleDown:
+	sra	h
+	jr	z, _gPostDivide
+_gScaleDownLoop:
+	rra
+	sra	b \ rr c
+	sra	d \ rr e
+	sra	h
+	jp	nz, _gScaleDownLoop
+_gPostDivide:
+	rra
+	sra	b \ rr c
+	sra	d \ rr e
+_gScalingDone:
+;	srl	a
+;	sra	b \ rr c
+;	sra	d \ rr e
+; l=Z, e=X, c=Y
+; first optimized iters (h is 0, d,b are 0 or -1)
+_gBissectIterF:
+	cp	98
+	jr	z, _gBissectIterL
+	jp	nc, _gBissectIter0NC
+_gBissectIter0C:
+	ld	l, a
+	srl	a
+	ld	h, a
+	ld	a, e
+	sra	a
+	ld	d, a
+	ld	a, c
+	sra	a
+	ld	b, a
+	ld	a, l
+	add	a, h
+	rra
+	cp	49
+	jr	z, _gBissectIterL
+	jp	nc, _gBissectIterateNC
+_gBissectIterateC:
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gBissectIterENC
+_gBissectIterEC:
+	jp	nz, _gBissectIterateC
+	jp	_gBissectIterL
+_gBissectIter0NC:
+	rra
+	ld	l, a
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+	add	a, h
+	rra
+	cp	49
+	jr	z, _gBissectIterL
+	jp	c, _gBissectIterateC
+_gBissectIterateNC:
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gBissectIterEC
+_gBissectIterENC:
+	jp	nz, _gBissectIterateNC
+
+_gBissectIterL:
+	ld	a, e
+	add	a, d
+	rra
+	add	a, 47
+	jp	p, _gSkipClampX0
+	xor	a
+_gSkipClampX0:
+	cp	96
+	jp	c, _gSkipClampX95
+	ld	a, 95
+_gSkipClampX95:
+	ld	l, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, 32
+	sub	a, c
+	jp	m, _gClampY0
+	ld	h, a
+	cp	64
+	ret	c
+_gClampY63:
+	ld	h, 63
+	ret
+_gClampY0:
+	ld	h, 0
+	ret
+
+#comment
+
+
+
+_gFirstIter:
+	cp	49*2
+	jp	nc, _gBissectIter0NC
+	ld	l, a
+	srl	a
+	ld	h, a
+	ld	a, e
+	sra	a
+	ld	d, a
+	ld	a, c
+	sra	a
+	ld	b, a
+; now perform core iter. 65 T-States/iter
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gBissectIter1NC
+_gBissectIter1C:
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gBissectIter2NC
+_gBissectIter2C:
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gBissectIter3NC
+_gBissectIter3C:
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gBissectIter4NC
+_gBissectIter4C:
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	nc, _gLastIterNC
+_gLastIterC:
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, e
+	rra
+	adc	a, 47
+	jp	p, _gSkipClampX0C
+	xor	a
+_gSkipClampX0C:
+	cp	96
+	jp	c, _gSkipClampX95C
+	ld	a, 95
+_gSkipClampX95C:
+	ld	l, a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, c
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	jp	m, _gClampY0C
+	ld	h, a
+	cp	64
+	ret	c
+_gClampY63C:
+	ld	h, 63
+	ret
+_gClampY0C:
+	ld	h, 0
+	ret
+_gBissectIter0NC:
+	rra
+	ld	l, a
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+; now perform core iter. 65TStates/iter
+; place optimized iter
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gBissectIter1C
+_gBissectIter1NC:
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gBissectIter2C
+_gBissectIter2NC:
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gBissectIter3C
+_gBissectIter3NC:
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gBissectIter4C
+_gBissectIter4NC:
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+	jp	c, _gLastIterC
+_gLastIterNC:
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, d
+	rra
+	adc	a, 47
+	jp	p, _gSkipClampX0NC
+	xor	a
+_gSkipClampX0NC:
+	cp	96
+	jp	c, _gSkipClampX95NC
+	ld	a, 95
+_gSkipClampX95NC:
+	ld	l, a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, b
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	jp	m, _gClampY0NC
+	ld	h, a
+	cp	64
+	ret	c
+_gClampY63NC:
+	ld	h, 63
+	ret
+_gClampY0NC:
+	ld	h, 0
+	ret
+#endcomment
+#comment
+_gMapRange:
+	ld	a, h
+	or	a
+	jr	z, _gScaleUp
+_gScaleDownLoop:
+	rra
+	rr	l
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+	or	a
+	jp	nz, _gScaleDownLoop
+	ld	h, a
+	ld	a, l
+	jp	_gScalingDone
+_gScaleUp:
+	ld	a, l
+	add	a, a
+	jp	c, _gScaleUpSkip
+	ret	z
+_gScaleUpLoop:
+	sla	e
+	rl	d
+	sla	c
+	rl	b
+	add	a, a
+	jp	nc, _gScaleUpLoop
+_gScaleUpSkip:
+	rra
+_gScalingDone:
+	srl	a
+; shift down 1bit	
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+
+_gBissectFirstIter:
+	cp	98
+; calculate midpoint and classify
+	jr	nc, _gOtherSide
+	srl	a
+	ld	h, a
+	ld	a, e
+	sra	d
+	rra
+	ld	d, a
+	ld	a, c
+	sra	b
+	rra
+	ld	b, a
+	jp	_gEndFirstIter
+_gOtherSide:
+; most taken branch:
+	srl	l
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+_gEndFirstIter:
+; the bissection macro, unrolled to gain speed (and because we need all register)
+#macro	_gBissectIter()
+; 72/67 TStates per iterations
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+; calculate midpoint and classify
+	jr	nc, $+14
+; store to h
+	ld	h, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	jp	$+12
+; store it to l
+	ld	l, a
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+#endmacro
+; 3 more iters to match precision
+_gBissectIter()
+_gBissectIter()
+_gBissectIter()
+; last optimized iter
+	ld	a, l	
+	add	a, h
+	rra
+	cp	49
+; calculate midpoint and classify
+	jp	nc, _gMidPointUp
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, e
+	rra
+	adc	a, 47
+	ld	(gRasterX), a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, c
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	ld	(gRasterY), a
+	ret
+_gMidPointUp:
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, d
+	rra
+	adc	a, 47
+	ld	(gRasterX), a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, b
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	ld	(gRasterY), a
+	ret
+#endcomment
+#comment
+; old slow way
+	ld	hl, 49*512
+	ld	de, (gPositionZ)
+	call	sub_Div
+	push	hl
+	ld	de, (gPositionY)
+	call	sub_Mul
+	ld	a, h
+	sra	a
+	ld	h, a
+	ld	a, 32
+	sbc	a, h
+	ld	(gRasterY), a
+	pop	hl
+	ld	de, (gPositionX)
+	call	sub_Mul
+	ld	a, h
+	sra	a
+	adc	a, 47
+	ld	(gRasterX), a
+	ret
+#endcomment
+gProjectEnd:
+#else
+gProject:
+; app project, using a 256 bytes aligned LUT for speeding up calculation
+; ~630 TStates
+; hl is Z, de is X, bc is Y
+; assume hl is stricly positive
+; ~700 TStates depending the input
+	ld	hl, (gPositionZ)
+	ld	de, (gPositionX)
+	ld	bc, (gPositionY)
+_gMapRange:
+	ld	a, h
+	or	a
+	jr	z, _gScaleUp
+_gScaleDownLoop:
+	rra
+	rr	l
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+	or	a
+	jp	nz, _gScaleDownLoop
+	ld	h, a
+_gScaleUp:
+	ld	a, l
+	add	a, a
+	jp	c, _gScalingDone
+	ret	z
+_gScaleUpLoop:
+; need to rotate upper bit due to issues in cliping
+	sla	e
+	rl	d
+	sla	c
+	rl	b
+	add	a, a
+	jp	nc, _gScaleUpLoop
+_gScalingDone:
+	rra
+	srl	a
+; get the LUT value
+	ld	l, a
+	ld	h, gProjectLUT/256
+	ld	l, (hl)
+; shift down 1bit	
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+; l=Z, e=X, c=Y
+; first optimized iters (h is 0, d,b are 0 or -1)
+_gBissectFirstIter:
+	rr	l
+	jp	nc, _gBissectIter0NC
+_gBissectIter0C:
+	ld	a, e
+	sra	d
+	rra
+	ld	d, a
+	ld	a, c
+	sra	b
+	rra
+	ld	b, a
+; now perform core's iterations
+; 50 TStates per iterations (3), 117 TStates last iter
+; 267 TStates total
+	rr	l
+	jp	nc, _gBissectIter1NC
+_gBissectIter1C:
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	rr	l
+	jp	nc, _gBissectIter2NC
+_gBissectIter2C:
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	rr	l
+	jp	nc, _gBissectIter3NC
+_gBissectIter3C:
+	ld	a, e
+	add	a, d
+	rra
+	ld	d, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	b, a
+	rr	l
+	jp	nc, _gMidPointUp
+_gMidPointDown:
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, e
+	rra
+	adc	a, 47
+	ld	(gRasterX), a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, c
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	ld	(gRasterY), a
+	ret
+_gBissectIter0NC:
+	sra	d
+	rr	e
+	sra	b
+	rr	c
+	rr	l
+	jp	c, _gBissectIter1C
+_gBissectIter1NC:
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	rr	l
+	jp	c, _gBissectIter2C
+_gBissectIter2NC:
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	rr	l
+	jp	c, _gBissectIter3C
+_gBissectIter3NC:
+	ld	a, e
+	add	a, d
+	rra
+	ld	e, a
+	ld	a, c
+	add	a, b
+	rra
+	ld	c, a
+	rr	l
+	jp	c, _gMidPointDown
+_gMidPointUp:
+	ld	a, e
+	add	a, d
+	rra
+	adc	a, d
+	rra
+	adc	a, 47
+	ld	(gRasterX), a
+	ld	a, c
+	add	a, b
+	rra
+	adc	a, b
+	rra
+	ld	c, a
+	ld	a, 32
+	sbc	a, c
+	ld	(gRasterY), a
+	ret
+gEndLUTProject:
+#endif

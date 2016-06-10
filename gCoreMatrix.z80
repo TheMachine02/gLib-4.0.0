@@ -1,0 +1,386 @@
+; Matrix operation file
+; functions:
+; gLoadIdentity : return identity matrix in gWorldViewMatrix	
+; gPushMatrix : push a matrix into the stack [WARNING:should be called in same subroutine level than gPopMatrix].
+; gPopMatrix : pop a matrix off the stack	[WARNING:should be called in same subroutine level than gPushMatrix].
+; gAngle(vec2 angleXY) : get the 3x3 rotation matrix.
+; gTranspose(mat3 Matrix) : transpose the specified 3x3 matrix.
+;; gLookAt(vec3 eye, vec3 up, vec3 center) : get 3x3 matrix corresponding to a view vector. Efficient for tracking object.
+; gTransform(wvec3 vertex) : multiply the given vector by the current matrix and output it to gPosition. Matrix is considered as 3x3 with 3x1 16 bits  translation vector. [WARNING:overwrite 4 bytes at gScratchRAM ($848F)]
+
+#ifdef	gCOMPILE_AXM
+gLoadIdentity=AXM_LABEL
+	.dw	gLoadIdentityEnd
+	.db	00011111b
+	.db	62h, 03h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gLoadIdentity:
+#endif
+; 168 T-States, no input
+; load the identity matrix
+	ld	de, 64*256
+	ld	a, d
+	ld	h, e
+	ld	l, e
+	ld	(gWorldViewMatrix+$0), a
+	ld	(gWorldViewMatrix+$1), hl
+	ld	(gWorldViewMatrix+$3), de
+	ld	(gWorldViewMatrix+$5), hl
+	ld	(gWorldViewMatrix+$7), de
+	ld	(gWorldViewMatrix+$9), hl
+	ld	(gWorldViewMatrix+$B), hl
+	ld	(gWorldViewMatrix+$D), hl
+	ret
+gLoadIdentityEnd:
+
+#ifdef	gCOMPILE_AXM
+gPushMatrix=AXM_LABEL
+	.dw	gPushMatrixEnd
+	.db	%00011111
+	.db	62h, 06h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gPushMatrix:
+#endif
+; 231 T-States
+	pop	de
+	ld	hl, (gWorldViewMatrix+$0)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$2)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$4)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$6)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$8)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$A)
+	push	hl
+	ld	hl, (gWorldViewMatrix+$C)
+	push	hl
+	ld	a, (gWorldViewMatrix+$E)
+	push	af
+	ex	de, hl
+	jp	(hl)
+gPushMatrixEnd:
+
+#ifdef	gCOMPILE_AXM
+gPopMatrix=AXM_LABEL
+	.dw	gPopMatrixEnd
+	.db	%00011111
+	.db	62h, 07h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gPopMatrix:
+#endif
+; 223 T-States
+	pop	de
+	pop	af
+	ld	(gWorldViewMatrix+$E), a
+	pop	hl
+	ld	(gWorldViewMatrix+$C), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$A), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$8), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$6), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$4), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$2), hl
+	pop	hl
+	ld	(gWorldViewMatrix+$0), hl
+	ex	de, hl
+	jp	(hl)
+gPopMatrixEnd:
+
+#ifdef	gCOMPILE_AXM
+gAngle=AXM_LABEL
+	.dw	gAngleEnd
+	.db	%00011111
+	.db	62h, 0Ch
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gAngle:
+#endif
+	ld	b, h
+	ld	c, l
+; angle y=c, x=b
+	ld	h, gSinLUT/256
+	ld	e, 64
+
+	ld	a, (hl)
+	ld	(gWorldViewMatrix+$2), a
+
+	ld	a, c
+	add	a, e
+	ld	l, a
+	ld	a, (hl)
+	ld	(gWorldViewMatrix+$0), a
+	xor	a
+	ld	(gWorldViewMatrix+$1), a
+
+	ld	a, b
+	add	a, l
+	ld	l, a
+	ld	d, (hl)
+	sub	c
+	sub	c
+	ld	l, a
+	ld	a, (hl)
+	sub	d
+	sra	a
+	ld	(gWorldViewMatrix+$3), a
+
+	ld	a, b
+	add	a, e
+	ld	l, a
+	ld	a, (hl)
+	ld	(gWorldViewMatrix+$4), a
+	
+	ld	a, b
+	add	a, c
+	ld	l, a
+	ld	d, (hl)
+	sub	c
+	sub	c
+	ld	l, a
+	ld	a, (hl)
+	sra	a
+	sra	d
+	add	a, d
+	neg
+
+	ld	(gWorldViewMatrix+$5), a
+
+	ld	a, (hl)
+	sub 	d
+	sra	a
+	ld	(gWorldViewMatrix+$6), a
+#comment	
+	ld	a, l
+	add	a, e
+	ld	l, a
+	ld	d, (hl)
+	add	a, c
+	add	a, c
+	ld	l, a
+	ld	a, (hl)
+	add	a, d
+	sra	a
+#endcomment
+	ld	a, l
+	add	a, e
+	ld	l, a
+	add	a, c
+	add	a, c
+	ld	d, (hl)
+	ld	l, a
+	ld	a, (hl)
+	sra	d
+	sra	a
+	add	a, d	
+
+	ld	l, b
+	ld	l, (hl)
+	ld	h, a
+	ld	(gWorldViewMatrix+$7), hl
+	ret
+gAngleEnd:
+
+#ifdef	gCOMPILE_AXM
+gTranspose=AXM_LABEL
+	.dw	gTransposeEnd
+	.db	%00011111
+	.db	62h, 0Fh
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gTranspose:
+#endif
+; 264 T-States, HL is the matrix adress
+; transpose the specified matrix
+	;0,1,2
+	;3,4,5
+	;6,7,8
+; converted to :
+	;0,3,6
+	;1,4,7
+	;2,5,8
+	push	hl
+	pop	ix
+	ld	c, (ix+$3)
+	ld	a, (ix+$1)
+	ld	(ix+$3), a
+	ld	(ix+$1), c
+	ld	c, (ix+$6)
+	ld	a, (ix+$2)
+	ld	(ix+$6), a
+	ld	(ix+$2), c
+	ld	c, (ix+$7)
+	ld	a, (ix+$5)
+	ld	(ix+$7), a
+	ld	(ix+$5), c
+	ret
+gTransposeEnd:
+
+#ifdef	gCOMPILE_AXM
+gTransform=AXM_LABEL
+	.dw	gTransformEnd
+	.db	%00011111
+	.db	62h, 05h
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gTransform:
+#endif
+; ~2500 T-States, HL is vector
+; multiply the given vector by the current matrix
+; retrieve data
+	ld	de, gScratchRAM
+	ldi \ ldi \ ldi \ ldi
+	ld	c, (hl)
+	inc	hl
+	ld	b, (hl)
+	push	bc
+	ld	hl, $0
+	ld	a, (gWorldViewMatrix+$2)
+	add	a, a
+	call	nz, _gMulEntry
+	ex	de, hl
+; flag prediction
+	pred z
+	gMultBlock(1,1)
+; set default flag
+	pred nz
+; block macro with ld outside jmp
+	gMultBlockEx(0,0,GEX_LOAD)
+	ld	a, e
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	ld	e, a
+	ld	hl, (gWorldViewMatrix+$9)
+	add	hl, de
+	ld	(gPositionX), hl
+	ld	hl, $0
+	ld	a, (gWorldViewMatrix+$3)
+	add	a, a
+	call	nz, _gMulEntry
+	ex	de, hl
+	gMultBlock(4,1)
+	pop	bc
+; load is the pop
+	gMultBlockEx(5,2,GNO_LOAD)
+	ld	a, e
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	ld	e, a
+	ld	hl, (gWorldViewMatrix+$B)
+	add	hl, de
+	ld	(gPositionY), hl
+	ld	hl, $0
+	ld	a, (gWorldViewMatrix+$8)
+	add	a, a
+	call	nz, _gMulEntry
+	ex	de, hl
+	gMultBlock(6,0)
+	gMultBlock(7,1)
+	ld	a, e
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	sra	d \ rra
+	ld	e, a
+	ld	hl, (gWorldViewMatrix+$D)
+	add	hl, de
+	ld	(gPositionZ), hl
+	ret
+; exposing the multiplication to API
+gMulBCxA:
+	add	a, a
+	ret	z
+; hightly integrated multiplication routine :
+; worst case ~270T-States
+_gMulEntry:
+	jr	nc, _gMulPos
+_gMulNeg:
+	ld	hl, $1
+	sbc	hl, bc
+	add	a, a
+	jr	z, _gMBit6
+	add	a, a
+	jp	c, _gMBit5
+	add	hl, hl
+_gMBit5:
+	add	hl, hl
+	add	a, a
+	jr	nc, $+3
+	add	hl, bc
+_gMBit4:
+	add	hl, hl
+	add	a, a
+	jr	nc, $+3
+	add	hl, bc
+_gMBit3:
+	add	hl, hl
+	add	a, a
+	jr	nc, $+3
+	add	hl, bc
+_gMBit2:
+	add	hl, hl
+	add	a, a
+	jr	nc, $+3
+	add	hl, bc
+_gMBit1:
+	add	hl, hl
+	ret	z
+	add	hl, bc
+	ret
+_gMulPos:
+	ld	h, b
+	ld	l, c
+	add	a, a
+	jr	c, _gMBit6
+	add	a, a
+	jp	c, _gMBit5
+	add	a, a
+	jp	c, _gMBit4
+	add	a, a
+	jp	c, _gMBit3
+	add	a, a
+	jp	c, _gMBit2
+	add	a, a
+	ret	nc
+	add	hl, hl
+	ret	z
+	add	hl, bc
+	ret
+_gMBit6:
+	sra	h
+	rr	l
+	rra
+	sra	h
+	rr	l
+	rra
+	ld	h, l
+	ld	l, a
+	ret
+gTransformEnd:
+
+

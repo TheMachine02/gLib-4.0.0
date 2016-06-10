@@ -1,0 +1,149 @@
+; gNormalize(vec3 vector) : normalize the given vector
+; gSqrt(number) : calculate the square root of the number
+;; gReflect(params) : calculate the reflection vector
+; gDot(vec3,vec3) : calculate dot product of two vectors
+
+#ifdef	gCOMPILE_AXM
+gSqrt=AXM_LABEL
+	.dw	gSqrtEnd
+	.db	%00011111
+	.db	62h, 1Bh
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gSqrtHL:
+#endif
+; Most 555 T-States, 111 bytes
+; Taken from wikiti (author Xeda112358)
+	xor	a
+	ld	c, a
+	ld	d, a
+	ld	e, l
+	ld	l, h
+	ld h, c
+; iter1
+	add	hl, hl
+	add	hl, hl
+	sub	h
+	jr	nc,$+5
+	inc	c
+	cpl
+	ld	h, a
+; iter2
+	add	hl, hl
+	add	hl, hl
+	rl	c
+	ld	a, c
+	rla
+	sub	h
+	jr	nc, $+5
+	inc	c
+	cpl
+	ld	h, a
+; iter3
+	add	hl, hl
+	add	hl, hl
+	rl	c
+	ld	a, c
+	rla
+	sub	h
+	jr	nc, $+5
+	inc	c
+	cpl
+	ld	h, a
+; iter4
+	add	hl, hl
+	add	hl, hl
+	rl	c
+	ld	a, c
+	rla
+	sub	h
+	jr	nc, $+5
+	inc	c
+	cpl
+	ld	h, a
+; iter5	
+	ld	l, e
+	add	hl, hl
+	add	hl, hl
+	rl	c
+	ld	a, c
+	rla
+	sub	h
+	jr	nc, $+5
+	inc	c
+	cpl
+	ld	h, a
+; iter6
+	add	hl, hl
+	add	hl, hl
+	rl	c
+	ld	a, c
+	rla
+	sub	h
+	jr	nc, $+5
+	inc	c
+	cpl
+	ld	h, a
+; iter7
+	sla	c \ ld a, c \ add a,a
+	add	hl, hl
+	add	hl, hl
+	jr	nc,$+6
+	sub	h \ jp $+6
+	sub 	h
+	jr	nc,$+5
+	inc	h
+	cpl
+	ld	h, a
+; iter8
+	ld	e, h
+	ld	h, l
+	ld	l, c
+	ld	a, l
+	add	hl, hl \ rl e \ rl d
+	add	hl, hl \ rl e \ rl d
+	sbc	hl, de
+	rla
+	ld	l, a
+	ld	h, 0
+	ret
+gSqrtEnd:
+
+#ifdef	gCOMPILE_AXM
+gSin=AXM_LABEL
+	.dw	gSinEnd
+	.db	%00011111
+	.db	62h, 1Eh
+	.db	AXM_INLINE
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gSin:
+#endif
+	ld	h, gSinLUT/256
+	ld	l, (hl)
+	ld	h, 0
+gSinEnd:
+
+#ifdef	gCOMPILE_AXM
+gNormalize=AXM_LABEL
+	.dw	gNormalizeEnd
+	.db	%00011111
+	.db	0h, 0h
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gNormalize:
+#endif
+;	temp=64*256/sqrt(x²+y²+z²)
+;	xn=x*temp/256
+;	yn=y*temp/256
+;	zn=z*temp/256
+
+
+
+	ret
+gNormalizeEnd:

@@ -1,0 +1,184 @@
+#include	"gCoreMain.inc"
+#include	"gCoreMacro.inc"
+
+; Roswell come with a revised pipeline and various optimisation, 
+; boosting performance by almost 30%. It has also a 
+; lower memory impact.
+; It is also possible to interface gLib API from an app, by recompiling axiom with the gCOMPILE_APP target.
+
+
+#ifdef	gCOMPILE_AXM
+	.dw	AXM_HEADER
+; first sub
+gInitEngine=AXM_INIT
+; perform library initialisation
+	.dw	gInitEnd + 3
+	.db	%00011111
+	.db	62h, 02h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gInitEngine:
+#endif
+; ~100000 T-States
+; return: HL=0 if init proceed without error, non-zero otherwise
+; clean flag
+;	xor	a
+;	ld	(iy+gFLAGS), a
+; fill all L1 with 0
+	ld	hl, saveSScreen
+	ld	(hl), 0
+	ld	de, saveSScreen+1
+	ld	bc, 767
+	ldir
+; initialise filling table
+	ld	de, gFillLUT
+#ifdef	gCOMPILE_AXM
+	.db $7F \ .org $-1
+#endif
+	ld	hl, gData_Filling
+	ld	c, gFillSize
+	ldir
+; initialise name string
+;#ifdef	gCOMPILE_AXM
+;	.db	$7F \ .org $-1
+;#endif
+;	ld	hl, gData_VertexArrayName
+;	ld	de, gVertexArrayName
+;	ld	c, 5
+;	ldir
+_gCopySinTable:
+; copy the sinus table at gSinLUT (aligned)
+	ld	de, gSinLUT
+#ifdef	gCOMPILE_AXM
+	.db	$7F \ .org $-1
+#endif
+	ld	hl, gData_SinLUT
+; make b=256
+	inc	b
+	ldir
+; next : shader system initialisation
+	ld	hl, plotSScreen
+	ld	(gLayer), hl
+_gGenCache:
+; generate a aligned cache for vertex
+; get the full adress of cache (not aligned) in gVertexCache
+; get high byte of aligned adress in gL2Cache
+#ifdef	gCOMPILE_AXM
+	.db	$7F \ .org $-1
+#endif
+	ld	hl, gData_CacheName
+	push	hl
+	ld	hl, gCACHE_SIZE
+	call	sub_NewVar
+	ld	a, h
+	or	l
+	jr	z, _gGenError
+	ld	(gVertexCache), hl
+	ld	a, l
+	or	a
+	jr	z, _gSkipBoundInc
+	inc	h
+_gSkipBoundInc:
+	ld	a, h
+	ld	(gL1Cache), a
+	add	a, 2
+	ld	(gL2Cache), a
+; speed stuff - disable TI interrupt and indicator
+	bcall(_RunIndicOff)
+	res	5,(iy+0)
+	di
+; initialise the matrix
+	call	gLoadIdentity
+; end initialisation
+	ld	hl, 0
+	ret
+_gGenError:
+	ld	hl, gOUT_OF_MEMORY
+	ld	(gError), hl
+	ret
+gData_CacheName:
+	.db	$16,"GVCACHE",0
+;gData_VertexArrayName:
+;	.db	$16,"GVAO"
+gInitEnd:
+
+; various commands
+#include	"gCoreMatrix.z80"
+#include	"gCoreCache.z80"
+#include	"gCoreMath.z80"
+#include	"gCoreProject.z80"
+#include	"gCoreLUT.z80"
+
+#include	"gCoreClipping.z80"
+#include	"gCoreRaster.z80"
+
+#ifdef	gCOMPILE_AXM
+	.echo	 "Number of command(s):", eval(gSubVal-$3F60+1)
+; axm end
+	.dw	AXM_END
+
+; token hook
+; system
+	.dw	029Eh
+	.db	11
+	.db	"gInitEngine"
+; matrix
+	.dw	02A0h
+	.db	13
+	.db	"gLoadIdentity"
+	.dw	02A6h
+	.db	11
+	.db	"gPushMatrix"
+	.dw	02A8h
+	.db	10
+	.db	"gPopMatrix"
+	.dw	02B2h
+	.db	7
+	.db	"gAngle("
+	.dw	02B8h
+	.db	11
+	.db	"gTranspose("
+; clipping
+	.dw	02D2h
+	.db	12
+	.db	"gClipVector("
+	.dw	02A2h
+	.db	12
+	.db	"gComputeCode"
+; vertex manipulation	
+	.dw	02B4h
+	.db	8
+	.db	"gProject"
+	.dw	02A4h
+	.db	11
+	.db	"gTransform("
+	.dw	02B6h
+	.db	9
+	.db	"gVxFetch "
+	.dw	2BCh
+	.db	12
+	.db	"gCacheVertex"
+	.dw	2BAh
+	.db	8
+	.db	"gStream("
+; filling/raster
+	.dw	02D8h
+	.db	7
+	.db	"gPoint("
+	.dw	02D4h
+	.db	6
+	.db	"gLine("
+	.dw	02DAh
+	.db	10
+	.db	"gTriangle("
+; math
+	.dw	02D0h
+	.db	6
+	.db	"gSqrt("
+	.dw	02D6h
+	.db	5
+	.db	"gSin("
+
+#endif

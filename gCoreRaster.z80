@@ -1,0 +1,329 @@
+; This file hold filling/drawing functions
+; functions:
+; gData_Filling  UNCALLABLE, data - standard shader
+; gTriangle(adress) : return nothing
+
+#ifdef	gCOMPILE_AXM
+gData_Filling=AXM_LABEL
+	.dw	gFillTableEnd
+	.db	%00011111
+	.db	0,0
+	.db	AXM_DATA
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gData_Filling:
+	#define	gORGSave	$
+	.org	$0
+#endif
+#define	gFillSize	gFillTableEnd
+	.db	_gWrite1byte%256
+	.db	_gWrite2byte%256
+	.db	_gWrite3byte%256
+	.db	_gWrite4byte%256
+	.db	_gWrite5byte%256
+	.db	_gWrite6byte%256
+	.db	_gWrite7byte%256
+	.db	_gWrite8byte%256
+	.db	_gWrite9byte%256
+	.db	_gWrite10byte%256
+	.db	_gWrite11byte%256
+_gWrite11byte:
+	ld (hl), c \ inc hl
+_gWrite10byte:
+	ld (hl), c \ inc hl
+_gWrite9byte:
+	ld (hl), c \ inc hl
+_gWrite8byte:
+	ld (hl), c \ inc hl
+_gWrite7byte:
+	ld (hl), c \ inc hl
+_gWrite6byte:
+	ld (hl), c \ inc hl
+_gWrite5byte:
+	ld (hl), c \ inc hl
+_gWrite4byte:
+	ld (hl), c \ inc hl
+_gWrite3byte:
+	ld (hl), c \ inc hl
+_gWrite2byte:
+	ld (hl), c \ inc hl
+_gWrite1byte:
+; mask writing
+	gRightPxlMask
+	or	(hl)
+	ld	(hl), a
+	ret
+gFillTableEnd:
+#ifndef	gCOMPILE_AXM
+	#define	gNewORG	gORGSave+$
+	.org	gNewORG
+	#undef	gNewORG
+	#undef	gORGSave
+#endif
+
+
+#ifdef	gCOMPILE_AXM
+gLine=AXM_LABEL
+	.dw	gLineEnd + 4
+	.db	%00011111
+	.db	62h, 1Dh
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+	call	gClipVector
+	ld	a, h
+	or	l
+	ret	z
+; y2=H, Y1=D, E=X2, L=X1
+	ld	ix, (gLayer)
+	ld	hl, (gLineX0)
+	ex	de, hl
+	ld	a, l
+	ld	l, e
+	ld	e, a
+.db $40 \ .db 25 \ .org $-2
+	call	sub_LineShr
+.db $40 \ .db 7 \ .org $-2
+	jp	sub_Line
+gLineEnd:
+#endif
+
+#ifdef	gCOMPILE_AXM
+gPoint=AXM_LABEL
+	.dw	gPointEnd + 1 + 2
+	.db	%00011111
+	.db	62h, 1Fh
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gPoint:
+#endif
+	ld	de, gVertexID
+	ldi
+	ld	hl, (gVertexID)
+	ld	a, (hl)
+	or	a
+	jr	nz, _gCacheMiss
+	dec	h
+	ld	d, (hl)
+	dec	h
+	ld	e, (hl)
+	jp	_gDrawPoint
+_gCacheMiss:
+	and	%01111111
+	ret	nz
+	ld	(hl), a
+; project & cache
+	push	hl
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	a, (hl)
+	inc	h
+	ld	l, (hl)
+	ld	h, a
+	or	a
+.db	$40 \ .db gProjectEntry \ .org $-2
+	call	gProject
+	ex	de, hl
+	pop	hl
+	dec	h
+	ld	(hl), d
+	dec	h
+	ld	(hl), e
+_gDrawPoint:
+	ld	bc, (gLayer)
+gDrawPoint:
+; DE (y,x)
+	ld	a, d
+	add	a, a
+	add	a, d
+	ld	l, a
+	xor	a
+	ld	d, a
+	ld	h, a	
+	add	hl, hl
+	add	hl, hl
+	add	hl, bc
+	ld	a, e
+	and	%00000111
+#ifdef	gCOMPILE_AXM
+	.db $7F \ .org $-1
+#endif
+	ld	bc, gPixelLUT
+	add	a, c
+	ld	c, a
+	jr	nc, $+3
+	inc	b
+	ld	a, (bc)
+	srl	e
+	srl	e
+	srl	e
+	add	hl, de
+	or	(hl)
+	ld	(hl), a
+	ret
+gPointEnd:
+
+#ifdef	gCOMPILE_AXM
+gTriangle=AXM_LABEL
+	.dw	gTriangleEnd
+	.db	%00011111
+	.db	62h, 20h
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gTriangle:
+#endif
+	ld	de, gPoint1
+	ldi \ ldi \ ldi
+	ldi \ ldi \ ldi
+
+	ld	a, (gPointY1)
+	ld	b, a
+	ld	a, (gPointY2)
+	cp	b
+	jr	nc, _gSkipSwap1
+	ld	hl, (gPoint1)
+	ld	de, (gPoint2)
+	ex	de, hl
+	ld	(gPoint1), hl
+	ld	(gPoint2), de
+_gSkipSwap1:
+	ld	a, (gPointY2)
+	ld	b, a
+	ld	a, (gPointY3)
+	cp	b
+	jr	nc, _gSkipSwap2
+	ld	hl, (gPoint2)
+	ld	de, (gPoint3)
+	ex	de, hl
+	ld	(gPoint2), hl
+	ld	(gPoint3), de
+_gSkipSwap2:
+	ld	a, (gPointY1)
+	ld	b, a
+	ld	a, (gPointY2)
+	cp	b
+	jr	nc, _gSkipSwap3
+	ld	hl, (gPoint1)
+	ld	de, (gPoint2)
+	ex	de, hl
+	ld	(gPoint1), hl
+	ld	(gPoint2), de
+_gSkipSwap3:
+
+	ld	a, (gPointX1)
+	ld	b, a
+	ld	a, (gPointX2)
+	sub	b
+	ld	h, a
+	ld	l, $00
+	ld	a, (gPointY1)
+	ld	b, a
+	ld	a, (gPointY2)
+	sub	b
+	jr	z, _gSkipDiv1
+	ld	e, a
+	rla
+	sbc	a, a
+	ld	d, a
+	call	sub_SDiv
+_gSkipDiv1:
+	ld	(gXDelta1), hl
+
+	ld	a, (gPointX1)
+	ld	b, a
+	ld	a, (gPointX3)
+	sub	b
+	ld	h, a
+	ld	l, $00
+	ld	a, (gPointY1)
+	ld	b, a
+	ld	a, (gPointY3)
+	sub	b
+	jr	z, _gSkipDiv2
+	ld	e, a
+	rla
+	sbc	a, a
+	ld	d, a
+	call	sub_SDiv
+_gSkipDiv2:
+	ld	(gXDelta2), hl
+
+	ld	a, (gPointX1)
+	ld	h, a
+	ld	l, $00
+	ld	(gXGrad1), hl
+	ld	(gXGrad2), hl
+
+	ld	a, (gPointY1)
+	ld	(gCurrentY), a
+	ld	b, $02
+_gTriangleOuter:
+	push	bc
+_gTriangleInner:
+	ld	l, a
+	xor	a
+	ld	h, a
+	push	hl
+	ld	hl, (gXGrad1HSB)
+	ld	h, a
+	push	hl
+	ld	hl, (gXGrad2HSB)
+	ld	h, a
+	call	sub_HLine
+
+	ld	hl, (gXGrad1)
+	ld	de, (gXDelta1)
+	add	hl, de
+	ld	(gXGrad1), hl
+
+	ld	hl, (gXGrad2)
+	ld	de, (gXDelta2)
+	add	hl, de
+	ld	(gXGrad2), hl
+
+	ld	hl, gCurrentY
+	inc	(hl)
+	ld	a, (hl)
+	ld	hl, gPointY2
+	cp	(hl)
+	jp	c, _gTriangleInner
+
+	ld	a, (gPointX2)
+	ld	b, a
+	ld	a, (gPointX3)
+	sub	b
+	ld	h, a
+	ld	l, $00
+	ld	a, (gPointY2)
+	ld	b, a
+	ld	a, (gPointY3)
+	sub	b
+	jr	z, _gSkipDiv3
+	ld	e, a
+	rla
+	sbc	a, a
+	ld	d, a
+	call	sub_SDiv
+_gSkipDiv3:
+	ld	(gXDelta1), hl
+	ld	a, (gPointY3)
+	ld	(gPointY2), a
+	ld	a, (gCurrentY)
+	pop	bc
+	djnz	_gTriangleOuter
+	ret
+gTriangleEnd:
+
+

@@ -1,0 +1,656 @@
+#ifdef	gCOMPILE_AXM
+gComputeCode=AXM_LABEL
+	.dw	gComputeCodeEnd
+	.db	%00011111
+	.db	62h, 04h
+	.db	AXM_SUB
+	.db	AXM_0ARGS
+	.org	$0
+#else
+gComputeCode:
+#endif
+; X-Z<0 : X+Z>0
+; xxx T-States (xx% faster) (semi-broken)
+	ld	de, (gPositionZ)
+	ld	hl, (gPositionX)
+	bit	7, h
+	jp	nz, _gXNegative
+	ld	a, %00001000
+	sbc	hl, de	
+	ccf
+	rla
+	ld	hl, (gPositionY)
+	ld	b, h
+	ld	c, l
+	add	hl, hl
+	add	hl, bc
+	sra h
+	jp	m, _gYNegative
+_gYPositive:
+	rr	l
+	or	a
+	rla
+	sbc	hl, de
+	ccf
+	rla
+	dec	de
+	rl	d
+	rla
+	ld	l, a
+	ret
+_gXNegative:
+	ld	a, %00000100
+	add	hl, de
+	ccf
+	rla
+	rla
+	ld	hl, (gPositionY)
+	ld	b, h
+	ld	c, l
+	add	hl, hl
+	add	hl, bc
+	sra h
+	jp	p, _gYPositive
+_gYNegative:
+	rr	l
+	add	hl, de
+	ccf
+	rla
+	rla
+	dec	de
+	rl	d
+	rla
+	ld	l, a
+	ret
+gComputeCodeEnd:
+
+#ifdef	gCOMPILE_AXM
+gClipVector=AXM_LABEL
+	.dw	gClipVectorEnd + 10
+	.db	%00011111
+	.db	62h, 1Ch
+	.db	AXM_SUB
+	.db	AXM_1ARGS
+	.org	$0
+#else
+gClipVector:
+#endif
+; id2=hl, stack-1=id1
+	ld	e, (hl)
+	inc	hl
+	ld	d, (hl)
+; D=id2, E=id1
+	ld	hl, (gVertexID)
+	ld	l, d
+	ld	b, (hl)
+	ld	l, e
+	ld	a, (hl)
+; B code of point1, C code of point2
+	or	b
+	and	%00111111
+	jr	nz, _gStartPrimitiveClip
+	ld	a, (hl)
+	xor	$80
+	jp	p, _gCacheMiss0
+; fetch p0
+	ld	a, b
+	dec	h
+	ld	b, (hl)
+	dec	h
+	ld	c, (hl)
+	ld	(gLineX0), bc
+	ld	l, d
+	xor	$80
+	jp	p, _gCacheMiss1
+_gCacheHit1:
+; fetch p1
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	ld	(gLineX1), de
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+_gCacheMiss0:
+	ld	e, b
+	push	de
+	push	hl
+	ld	(hl), a
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	a, (hl)
+	inc	h
+	ld	l, (hl)
+	ld	h, a
+	or	a
+.db	$40 \ .db gProjectEntry \ .org $-2
+	call	gProject
+	ex	de, hl
+	pop	hl
+	dec	h
+	ld	(hl), d
+	dec	h
+	ld	(hl), e
+	ld	(gLineX0), de
+	pop	de
+	ld	l, d
+	ld	a, e
+	xor	$80
+	jp	m, _gCacheHit1
+_gCacheMiss1:
+	push	hl
+	inc h \ inc h 
+	ld	(hl), a
+	inc h
+ 	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	a, (hl)
+	inc	h
+	ld	l, (hl)
+	ld	h, a
+	or	a
+.db	$40 \ .db gProjectEntry \ .org $-2
+	call	gProject
+	ex	de, hl
+	pop	hl
+	ld	(hl), e
+	inc	h
+	ld	(hl), d
+	ld	(gLineX1), de
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+#comment
+; load L1 cache
+	dec	h
+	ld	b, (hl)
+	dec	h
+	ld	c, (hl)
+	ld	(gLineX0), bc
+	ld	l, d
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	ld	(gLineX1), de
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+#endcomment
+_gDiscardPrimitive:
+; set primitive as CULLED
+	ld	hl, gPRIMITIVE_CULLED
+; ret point to call of 'gClipVector'
+	ret
+_gStartPrimitiveClip:
+	ld	a, (hl)
+	and	b
+	and	%00111111
+	jr	nz, _gDiscardPrimitive
+	ld	(gClipVertexID), de
+; load cache
+	inc	h
+; load first vertex
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	ld	(gClipCoordX1), bc
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	ld	(gClipCoordY1), bc
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	c, (hl)
+	ld	(gClipCoordZ1), bc
+; load second vertex
+	ld	l, d
+; load bc to de
+	ld	c, (hl)
+	dec	h
+	ld	b, (hl)
+	ld	(gClipCoordZ2), bc
+	dec	h
+	ld	b, (hl)
+	dec	h
+	ld	c, (hl)
+	ld	(gClipCoordY2), bc
+	dec	h
+	ld	b, (hl)
+	dec	h
+	ld	c, (hl)
+	ld	(gClipCoordX2), bc
+; initialise linear interpolation factor
+	ld	hl, 255
+	ld	(gLRPFactor1), hl
+; clip against Z = 1
+	ld	de, (gClipCoordZ1)
+	dec	de
+	ld	hl, (gClipCoordZ2)
+	dec	hl
+	ld	a, h
+	or	d
+	call	m, _gClipPlane
+; clip against Y down plane
+	ld	de, (gClipCoordY1)
+	ld	h, d
+	ld	l, e
+	add	hl, hl
+	add	hl, de
+	sra h \ rr l
+	ex	de, hl
+	ld	hl, (gClipCoordZ1)
+	or	a
+	sbc	hl, de
+	ex	de, hl
+	ld	bc, (gClipCoordY2)
+	ld	h, b
+	ld	l, c
+	add	hl, hl
+	add	hl, bc
+	sra h \ rr l
+	ld	b, h
+	ld	c, l
+	ld	hl, (gClipCoordZ2)
+	or	a
+	sbc	hl, bc
+	ld	a, h
+	or	d
+	call	m, _gClipPlane
+; clip against Y up plane
+	ld	de, (gClipCoordY1)
+	ld	h, d
+	ld	l, e
+	add	hl, hl
+	add	hl, de
+	sra h \ rr l
+	ex	de, hl
+	ld	hl, (gClipCoordZ1)
+	add	hl, de
+	ex	de, hl
+;	ld	bc, (gClipCoordY2)
+;	ld	h, b
+;	ld	l, c
+;	add	hl, hl
+;	add	hl, bc
+;	sra h \ rr l
+;	ld	b, h
+;	ld	c, l
+	ld	hl, (gClipCoordZ2)
+	add	hl, bc
+	ld	a, h
+	or	d
+	call	m, _gClipPlane
+; clip against right X plane
+	ld	hl, (gClipCoordZ1)
+	ld	de, (gClipCoordX1)
+	or	a
+	sbc	hl, de
+	ex	de, hl
+	ld	hl, (gClipCoordZ2)
+	ld	bc, (gClipCoordX2)
+	or	a
+	sbc	hl, bc
+	ld	a, h
+	or	d
+	call	m, _gClipPlane
+; clip against left X plane
+	ld	hl, (gClipCoordZ1)
+	ld	de, (gClipCoordX1)
+	add	hl, de
+	ex	de, hl
+	ld	hl, (gClipCoordZ2)
+;	ld	bc, (gClipCoordX2)
+	add	hl, bc
+	ld	a, h
+	or	d
+	call	m, _gClipPlane
+; line primitive as been clipped
+; calculate intersection point & screen coordinate
+; brutal approch - optimization is possible by applying LRP only on neccesary value & so as projection
+_gOddCheck:
+; factor1>factor2
+	ld	hl, (gLRPFactor1)
+	ld	a, l
+	cp	h
+	jp	c, _gDiscardPrimitiveS0
+; factor 1
+_gApplyLRP1:
+	inc	a
+	jp	z, _gNoLRP1
+	dec	a
+	call	_gCalculate2DCoord
+	ld	(gLineX0), hl
+_gApplyLRP2:
+	ld	a, (gLRPFactor2)
+	or	a
+	jp	z, _gNoLRP2
+	call	_gCalculate2DCoord
+	ld	(gLineX1), hl
+	ex	de, hl
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+_gNoLRP1:
+; fetch raster coordinate
+	ld	hl, (gVertexID)
+	ld	a, (gClipVertexID1)
+	ld	l, a
+	ld	a, (hl)
+	xor	$80
+	jp	m, _gCacheHitLRP1
+	ld	(hl), a
+	push	hl
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	a, (hl)
+	inc	h
+	ld	l, (hl)
+	ld	h, a
+	or	a
+.db	$40 \ .db gProjectEntry \ .org $-2
+	call	gProject
+	ex	de, hl
+	pop	hl	
+	dec	h
+	ld	(hl), d
+	dec	h
+	ld	(hl), e
+	ld	(gLineX0), de
+	jp	_gApplyLRP2
+_gCacheHitLRP1:
+	dec	h
+	ld	d, (hl)
+	dec	h
+	ld	e, (hl)
+	ld	(gLineX0), de
+	jp	_gApplyLRP2
+_gNoLRP2:
+; fecth raster coordinate
+	ld	hl, (gVertexID)
+	ld	a, (gClipVertexID2)
+	ld	l, a
+	ld	a, (hl)
+	xor	$80
+	jp	m, _gCacheHitLRP2
+	ld	(hl), a
+	push	hl
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	c, (hl)
+	inc	h
+	ld	b, (hl)
+	inc	h
+	ld	a, (hl)
+	inc	h
+	ld	l, (hl)
+	ld	h, a
+	or	a
+.db	$40 \ .db gProjectEntry \ .org $-2
+	call	gProject
+	ex	de, hl
+	pop	hl	
+	dec	h
+	ld	(hl), d
+	dec	h
+	ld	(hl), e
+	ld	(gLineX1), de	
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+_gCacheHitLRP2:
+	dec	h
+	ld	d, (hl)
+	dec	h
+	ld	e, (hl)
+	ld	(gLineX1), de
+	ld	hl, gPRIMITIVE_CLIPPED
+	ret
+_gCalculate2DCoord:
+; xi=(x1-x2)*C+x2
+; yi=(y1-y2)*C+y2
+; zi=(z1-z2)*C+z2
+; project
+	ld	hl, (gClipCoordX1)
+	ld	de, (gClipCoordX2)
+	call	_gLRPMul
+	push	hl
+	ld	hl, (gClipCoordY1)
+	ld	de, (gClipCoordY2)
+	call	_gLRPMul
+	push	hl
+	ld	hl, (gClipCoordZ1)
+	ld	de, (gClipCoordZ2)
+	call	_gLRPMul
+	pop	bc
+	pop	de
+	ld	a, h
+	or	a
+#ifdef	gCOMPILE_AXM
+.db $40 \ .db gProjectEntry \ .org $-2
+	jp	gProject
+#else
+	jp	gProjectEntry
+#endif
+_gDiscardPrimitiveS2:
+; quit one stack level
+	pop	af
+_gDiscardPrimitiveS1:
+; quit the 'call' stack level
+	pop	af
+_gDiscardPrimitiveS0:
+; set primitive as CULLED
+	ld	hl, gPRIMITIVE_CULLED
+; ret point to call of 'gClipVector'
+	ret
+_gClipPlane:
+; clip a line against a plane
+; advance either LRP1 or LRP2 based on 'out' point.
+; xx T-States & discard if totally 'out'
+; xx T-States if both point are in the plane
+; ~600 T-States if line is clipped
+; factor=hl/(hl-de) [D2/(D2-D1)]
+; 'out' check (to remove)
+	ld	a, h
+	and	d
+	jp	m, _gDiscardPrimitiveS1
+; point classification
+	push	hl
+	sbc	hl, de
+	jr	z, _gDiscardPrimitiveS2
+	ex	de, hl
+	pop	hl
+	jp	m, _gFindLRPFactor2
+_gFindLRPFactor1:
+; check outbound intersection
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nc, _gDiscardPrimitiveS1
+	call	_gLRPDivide
+; minimize the factor
+	ld	hl, gLRPFactor1
+	cp	(hl)
+	ret	nc
+	ld	(hl), a
+	ret
+_gFindLRPFactor2:
+; check outbound intersection
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, _gDiscardPrimitiveS1
+; negate HL and DE
+	xor	a
+	sub	l
+	ld	l, a
+	sbc	a, a
+	sub	h
+	ld	h, a
+	xor	a
+	sub	e
+	ld	e, a
+	sbc	a, a
+	sub	d
+	ld	d, a
+	call	_gLRPDivide
+; maximize the factor
+	ld	hl, gLRPFactor2
+	cp	(hl)
+	ret	c
+	ld	(hl), a
+	ret
+_gLRPDivide:
+; H.L/D.E->0.A   with HL<DE (unsigned)
+; From 339 to 381 T-States
+_gDivLoop:
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ jr nc,$+3 \ add hl,de \ adc a,a
+	add	hl,hl \ sbc hl,de \ adc a,a
+	cpl
+	ret
+_gLRPMul:
+; (HL-DE)xA/256+DE
+; keep DE,A intact
+; destroy BC
+; result is HL
+	or	a
+	sbc	hl, de
+	ld	b, h
+	ld	c, l
+	ld	hl, 0
+	rrca \ jr nc, $+8 
+	ld 	h, b
+	ld 	l, c
+	sra 	h
+	rr 	l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	rrca \ jr nc, $+3 \ add hl, bc \ sra h \ rr l
+	adc	hl, de
+	ret
+#comment
+; gClipPlane old version2
+	ld	a, h
+	and	d
+	jp	m, _gDiscardPrimitiveS1
+; point classification
+	push	hl
+	sbc	hl, de
+	jr	z, _gDiscardPrimitiveS2
+	ex	de, hl
+	pop	hl
+	jp	m, _gFindLRPFactor2
+_gFindLRPFactor1:
+; check outbound intersection
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	nc, _gDiscardPrimitiveS1
+	call	_gLRPDivide
+; minimize the factor
+	ld	hl, gLRPFactor1
+	cp	(hl)
+	ret	nc
+	ld	(hl), a
+	ret
+_gFindLRPFactor2:
+; check outbound intersection
+	or	a
+	sbc	hl, de
+	add	hl, de
+	jr	c, _gDiscardPrimitiveS1
+; negate HL and DE
+	xor	a
+	sub	l
+	ld	l, a
+	sbc	a, a
+	sub	h
+	ld	h, a
+	xor	a
+	sub	e
+	ld	e, a
+	sbc	a, a
+	sub	d
+	ld	d, a
+	call	_gLRPDivide
+; maximize the factor
+	ld	hl, gLRPFactor2
+	cp	(hl)
+	ret	c
+	ld	(hl), a
+	ret
+	ld	a, h
+	xor	d
+	jp	p, _gDiscardPrimitiveS1
+; point classification
+	xor	d
+	jp	m, _gFindLRPFactor2
+_gFindLRPFactor1:
+	push	hl
+	sbc	hl, de
+	jr	z, _gDiscardPrimitiveS2
+	ex	de, hl
+	pop	hl
+; check outbound intersection
+	sbc	hl, de
+	add	hl, de
+	jr	nc, _gDiscardPrimitiveS1
+	call	_gLRPDivide
+; minimize the factor
+	ld	hl, gLRPFactor1
+	cp	(hl)
+	ret	nc
+	ld	(hl), a
+	ret
+_gFindLRPFactor2:
+	ex	de, hl
+	push	hl
+	sbc	hl, de
+	jr	z, _gDiscardPrimitiveS2
+	ex	de, hl
+	pop	hl
+; check outbound intersection
+	sbc	hl, de
+	add	hl, de
+	jr	nc, _gDiscardPrimitiveS1
+	call	_gLRPDivide
+; 1-Factor
+	neg
+; maximize the factor
+	ld	hl, gLRPFactor2
+	cp	(hl)
+	ret	c
+	ld	(hl), a
+	ret
+
+#endcomment
+gClipVectorEnd:

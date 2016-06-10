@@ -1,0 +1,171 @@
+#ifdef	gCOMPILE_AXM
+gStream=AXM_LABEL
+	.dw	gStreamEnd + 2
+	.db	%00011111
+	.db	62h, 10h
+	.db	AXM_SUB
+	.db	AXM_2ARGS
+	.org	$0
+#else
+gStream:
+#endif
+	ld	de, gVertexStream
+	ldi \ ldi \ ldi
+	ld	a, (hl)
+	.db $7F \ .org $-1
+	ld	(gSMCStrideParam), a
+	pop	hl
+	ex	(sp), hl
+	ld	a, (gL2Cache)
+	ld	h, a
+	dec	l
+	push	hl
+_gStreamLoop:
+	call	gSMCVertexShader
+	ld	a, l
+	pop	hl
+	inc	l
+	push	hl
+	ld	(hl), a
+	inc	h
+	ld	de, (gPositionX)
+	ld	(hl), e
+	inc	h
+	ld	(hl), d
+	inc	h
+	ld	de, (gPositionY)
+	ld	(hl), e
+	inc	h
+	ld	(hl), d
+	inc	h
+	ld	de, (gPositionZ)
+	ld	(hl), d
+	inc	h
+	ld	(hl), e
+	ld	hl, gCountStream
+	dec	(hl)
+	jp	nz, _gStreamLoop
+	pop	hl
+	ret
+gSMCVertexShader:
+	ld	de, (gVertexStream)
+gSMCStrideParam = $+1
+	ld	hl, $0000
+	add	hl, de
+	ld	(gVertexStream), hl
+	ex	de, hl
+	call	gTransform
+#ifdef	gCOMPILE_AXM
+	.db $7F \ .org $-1
+#endif
+	jp	gComputeCode
+gStreamEnd:
+
+#ifdef	gCOMPILE_AXM
+gFetchVertex=AXM_LABEL
+	.dw	gFetchVertexEnd
+	.db	%00011111
+	.db	62h, 0Eh
+	.db	AXM_INLINE
+	.db	AXM_2ARGS
+	.org	$0
+#comment
+; 162 T-States
+	ld	hl, (gVertexID)
+	ld	a, (hl)
+	ld	(gClipCode), a
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	ld	(gPositionX), de
+	inc	h
+	ld	e, (hl)
+	inc	h
+	ld	d, (hl)
+	ld	(gPositionY), de
+	inc	h
+	ld	d, (hl)
+	inc	h
+	ld	e, (hl)
+	ld	(gPositionZ), de
+#endcomment
+; 185 TStates, 227.024Kb/s
+	pop	de
+; Id=DE, Stream=HL
+	ld	a, (gL2Cache)
+; setup high cache byte
+	ld	d, a
+; fetch, core x 7
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+; x,y,z  vector
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+	ld	a, (de) \ ld (hl), a
+	inc	d \ inc hl
+	ld	a, (de) \ ld (hl), a
+gFetchVertexEnd:
+
+gCacheVertex=AXM_LABEL
+	.dw	gCacheVertexEnd
+	.db	%00011111
+	.db	62h, 11h
+	.db	AXM_INLINE
+	.db	AXM_0ARGS
+	.org	$0
+; 162 T-States
+	ld	hl, (gVertexID)
+	ld	a, (gClipCode)
+	ld	(hl), a
+	inc	h
+	ld	de, (gPositionX)
+	ld	(hl), e
+	inc	h
+	ld	(hl), d
+	inc	h
+	ld	de, (gPositionY)
+	ld	(hl), e
+	inc	h
+	ld	(hl), d
+	inc	h
+	ld	de, (gPositionZ)
+	ld	(hl), d
+	inc	h
+	ld	(hl), e
+gCacheVertexEnd:
+#endif
+
+#comment
+#ifdef	gCOMPILE_AXM
+gFetchFrag=AXM_LABEL
+	.dw	gFetchFragEnd
+	.db	%00011111
+	.db	00h, 00h
+	.db	AXM_INLINE
+	.db	AXM_0ARGS
+	.org	$0
+	ld	hl, (gVertexID)
+	ld	a, (hl)
+	ld	(gFragCode), a
+	dec	h
+	ld	d, (hl)
+	dec	h
+	ld	e, (hl)
+	ld	(gFragX), de
+	ld	a, 7
+	add	a, h
+	ld	h, a
+	ld	d, (hl)
+	inc	h
+	ld	e, (hl)
+	ld	(gFragZ), de
+gFetchFragEnd:
+#endif
+#endcomment
